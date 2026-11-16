@@ -122,6 +122,19 @@ export function buildArena(scene, zoneId) {
   floor.receiveShadow = true;
   group.add(floor);
 
+  // Outer ground: a wide skirt of the same floor texture, darkened, so the
+  // frame never shows sky-blue void past the walls. The follow camera looks
+  // well beyond the arena when the player hugs the south wall, and without
+  // this the bottom of the frame is empty sky. Fog (45-90) fades the far
+  // edge out, so there is no hard rim.
+  const outerGeo = new THREE.PlaneGeometry(240, 240);
+  scaleUVs(outerGeo, 120, 120);
+  const outer = new THREE.Mesh(outerGeo, textured(0x8f8f8f, floorMap));
+  outer.rotation.x = -Math.PI / 2;
+  outer.position.y = -0.05;
+  outer.receiveShadow = true;
+  group.add(outer);
+
   // Perimeter walls.
   const wallMap = tex ? new THREE.CanvasTexture(tex[zone.wall]) : null;
   if (wallMap) {

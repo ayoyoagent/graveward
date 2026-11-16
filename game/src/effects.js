@@ -117,16 +117,18 @@ class NumberPool {
   }
 }
 
-// Flash an entity's materials white for a beat after a hit. The materials
-// are cloned at flash time so a shared material never flashes everywhere.
+// Flash an entity's materials for a beat after a hit: a warm tint at half
+// strength, not solid white — a full-white flash turned the Lich into a
+// white blob in still captures. The materials are cloned at flash time so
+// a shared material never flashes everywhere.
 export function flashMesh(group) {
   group.traverse((m) => {
     if (!m.isMesh || !m.material || !m.material.emissive) return;
     if (!m.userData.savedEmissive) m.userData.savedEmissive = m.material.emissive.getHex();
     m.material = m.material.clone();
-    m.material.emissive.setHex(0xffffff);
-    m.material.emissiveIntensity = 0.9;
-    m.userData.flashUntil = performance.now() + 90;
+    m.material.emissive.setHex(0xffe2b0);
+    m.material.emissiveIntensity = 0.45;
+    m.userData.flashUntil = performance.now() + 70;
   });
 }
 

@@ -135,8 +135,14 @@ function boot() {
   scene.background = new THREE.Color(PALETTE.sky);
   scene.fog = new THREE.Fog(PALETTE.fog, 45, 90);
 
-  camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 0.1, 200);
-  camera.position.set(0, 17.5, 14);
+  // Follow camera: high and far enough that the whole arena depth fits the
+  // frame at spawn (north wall visible, no enemy "pop-in" from the top
+  // edge). FOV 52 + height 19 + 14 south offset + lookAt 2.5 north of the
+  // player: top ray ~23 deg below horizontal, ground reach ~19/tan(23deg)
+  // ~ 45 m north of the camera. The outer ground skirt in world.js covers
+  // everything past the walls, so the bottom of the frame is never sky.
+  camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.1, 200);
+  camera.position.set(0, 19, 24);
   camera.lookAt(0, 0, 0);
 
   const hemi = new THREE.HemisphereLight(PALETTE.hemiSky, PALETTE.hemiGround, PALETTE.hemiIntensity);
@@ -272,6 +278,8 @@ function wireMenus() {
 function backToTitle() {
   clearField();
   hideBossBar();
+  if (playerMesh) playerMesh.visible = true;
+  if (playerBlob) playerBlob.visible = true;
   showScreen('title');
   screen = 'title';
 }
@@ -369,6 +377,8 @@ function startRun() {
   player.dashCharges = 1;
   equipWeapon(chosen.weapon);
   syncPlayerMesh();
+  if (playerMesh) playerMesh.visible = true;
+  if (playerBlob) playerBlob.visible = true;
   hideBossBar();
   screen = 'playing';
   paused = false;
@@ -617,6 +627,11 @@ function killBoss() {
   run.won = true;
   hideBossBar();
   sfx.victory();
+  // The victory overlay is semi-transparent, so hide the player mesh (and
+  // its blob) — it stood centre-frame behind the "Rooms cleared" stats row.
+  // Restored by startRun / backToTitle.
+  if (playerMesh) playerMesh.visible = false;
+  if (playerBlob) playerBlob.visible = false;
   if (run.difficulty === 'hard') setUnlock('graveward_hardClear');
   setUnlock('graveward_bossClear');
   screen = 'victory';
@@ -948,9 +963,9 @@ function updateCamera(dt) {
   const sx = shake > 0 ? (Math.random() - 0.5) * shake : 0;
   const sz = shake > 0 ? (Math.random() - 0.5) * shake : 0;
   camera.position.x += ((tx + sx) - camera.position.x) * Math.min(1, dt * 5);
-  camera.position.z += ((tz + 10.5 + sz) - camera.position.z) * Math.min(1, dt * 5);
-  camera.position.y = 17.5;
-  camera.lookAt(tx + sx, 0, tz - 1.5 + sz);
+  camera.position.z += ((tz + 14 + sz) - camera.position.z) * Math.min(1, dt * 5);
+  camera.position.y = 19;
+  camera.lookAt(tx + sx, 0, tz - 2.5 + sz);
 }
 
 // ------------------------------------------------------------ shot mode ---
@@ -1071,6 +1086,10 @@ function stageShot(kind) {
     rebuildArena('graveyard');
     player = createPlayer(0, 9);
     syncPlayerMesh();
+    // Hide the player mesh: the victory overlay is semi-transparent and
+    // the mesh would stand behind the stats row (see killBoss).
+    if (playerMesh) playerMesh.visible = false;
+    if (playerBlob) playerBlob.visible = false;
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * Math.PI * 2;
       dropCoin(Math.cos(a) * 3, 6 + Math.sin(a) * 2, 10);
