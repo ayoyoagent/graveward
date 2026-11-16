@@ -136,7 +136,7 @@ function boot() {
   scene.fog = new THREE.Fog(PALETTE.fog, 45, 90);
 
   camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 0.1, 200);
-  camera.position.set(0, 24, 14);
+  camera.position.set(0, 17.5, 14);
   camera.lookAt(0, 0, 0);
 
   const hemi = new THREE.HemisphereLight(PALETTE.hemiSky, PALETTE.hemiGround, PALETTE.hemiIntensity);
@@ -391,6 +391,24 @@ function spawnWave(spec) {
   run.enemiesLeft += kinds.length;
 }
 
+// A small health bar that rides above an enemy or boss. The two planes
+// are re-aimed at the camera every frame in stepSim.
+function attachHpBar(mesh, width, y, color = 0x58c96b) {
+  const hpBg = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, 0.12),
+    new THREE.MeshBasicMaterial({ color: 0x301510, transparent: true, opacity: 0.85, depthWrite: false }),
+  );
+  const hpFg = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, 0.12),
+    new THREE.MeshBasicMaterial({ color, depthWrite: false }),
+  );
+  hpBg.position.y = y;
+  hpFg.position.y = y;
+  hpFg.position.z = 0.01;
+  mesh.add(hpBg, hpFg);
+  return { hpBg, hpFg };
+}
+
 function spawnOneQueued() {
   const s = spawnQueue.shift();
   if (!s) return;
@@ -404,19 +422,8 @@ function spawnOneQueued() {
   const blob = makeBlob(1.3);
   blob.position.set(e.x, 0.03, e.z);
   scene.add(mesh, blob);
-  const hpBg = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.0, 0.12),
-    new THREE.MeshBasicMaterial({ color: 0x301510, transparent: true, opacity: 0.85, depthWrite: false }),
-  );
-  const hpFg = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.0, 0.12),
-    new THREE.MeshBasicMaterial({ color: 0x58c96b, depthWrite: false }),
-  );
-  hpBg.position.y = 2.1;
-  hpFg.position.y = 2.1;
-  hpFg.position.z = 0.01;
-  mesh.add(hpBg, hpFg);
-  enemyViews.set(e, { mesh, blob, hpBg, hpFg });
+  const bar = attachHpBar(mesh, 1.0, 2.1);
+  enemyViews.set(e, { mesh, blob, hpBg: bar.hpBg, hpFg: bar.hpFg });
 }
 
 function removeEnemyView(e) {
@@ -438,20 +445,9 @@ function enterBossRoom() {
   mesh.position.set(boss.x, 0, boss.z);
   const blob = makeBlob(2.6);
   blob.position.set(boss.x, 0.03, boss.z);
-  const hpBg = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.6, 0.16),
-    new THREE.MeshBasicMaterial({ color: 0x301510, transparent: true, opacity: 0.85, depthWrite: false }),
-  );
-  const hpFg = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.6, 0.16),
-    new THREE.MeshBasicMaterial({ color: 0xe04e3a, depthWrite: false }),
-  );
-  hpBg.position.y = 3.4;
-  hpFg.position.y = 3.4;
-  hpFg.position.z = 0.01;
-  mesh.add(hpBg, hpFg);
+  const bar = attachHpBar(mesh, 1.6, 3.4, 0xe04e3a);
   scene.add(mesh, blob);
-  bossView = { mesh, blob, hpBg, hpFg };
+  bossView = { mesh, blob, hpBg: bar.hpBg, hpFg: bar.hpFg };
   setBossBar(boss.name, 1);
   sfx.boss();
   showToast(`${boss.name} — ${boss.title}`);
@@ -534,12 +530,12 @@ function tryAttack() {
 
 function showSlash(facing, arc, radius) {
   const s = slashPool.find((x) => x.life <= 0) || slashPool[0];
-  const geo = new THREE.RingGeometry(0.6, radius, 24, 1, -arc / 2, arc);
+  const geo = new THREE.RingGeometry(Math.max(0.6, radius * 0.72), radius, 24, 1, -arc / 2, arc);
   s.mesh.geometry.dispose();
   s.mesh.geometry = geo;
   s.mesh.position.set(player.x, 0.4, player.z);
   s.mesh.rotation.z = facing + Math.PI / 2;
-  s.mesh.material.opacity = 0.85;
+  s.mesh.material.opacity = 0.4;
   s.mesh.visible = true;
   s.life = 0.16;
 }
@@ -709,10 +705,12 @@ function stepSim(dt) {
       v.blob.position.set(e.x, 0.03, e.z);
       animateWalk(v.mesh, e.walkPhase, e.kind === 'brute' ? 0.35 : 0.55);
       const frac = Math.max(0, e.hp / e.maxHp);
-      v.hpFg.scale.x = Math.max(0.001, frac);
-      v.hpFg.position.x = -(1 - frac) * 0.5;
-      v.hpBg.quaternion.copy(camera.quaternion);
-      v.hpFg.quaternion.copy(camera.quaternion);
+      if (v.hpFg) {
+        v.hpFg.scale.x = Math.max(0.001, frac);
+        v.hpFg.position.x = -(1 - frac) * 0.5;
+        v.hpBg.quaternion.copy(camera.quaternion);
+        v.hpFg.quaternion.copy(camera.quaternion);
+      }
       unflashMesh(v.mesh);
     }
   }
@@ -929,22 +927,8 @@ function handleBossEvent(ev) {
       const blob = makeBlob(1.3);
       blob.position.set(e.x, 0.03, e.z);
       scene.add(mesh, blob);
-      enemyViews.set(e, { mesh, blob, hpBg: null, hpFg: null });
-      // Summoned shamblers get a plain bar too.
-      const hpBg = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.0, 0.12),
-        new THREE.MeshBasicMaterial({ color: 0x301510, transparent: true, opacity: 0.85, depthWrite: false }),
-      );
-      const hpFg = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.0, 0.12),
-        new THREE.MeshBasicMaterial({ color: 0x58c96b, depthWrite: false }),
-      );
-      hpBg.position.y = 2.1;
-      hpFg.position.y = 2.1;
-      hpFg.position.z = 0.01;
-      mesh.add(hpBg, hpFg);
-      enemyViews.get(e).hpBg = hpBg;
-      enemyViews.get(e).hpFg = hpFg;
+      const bar = attachHpBar(mesh, 1.0, 2.1);
+      enemyViews.set(e, { mesh, blob, hpBg: bar.hpBg, hpFg: bar.hpFg });
     }
     showToast('The boss calls the dead to its side!');
   } else if (ev.type === 'teleport') {
@@ -959,14 +943,14 @@ function handleBossEvent(ev) {
 function updateCamera(dt) {
   if (!player) return;
   const tx = player.x;
-  const tz = player.z + 2;
+  const tz = player.z + 1.5;
   const shake = effects ? effects.shake : 0;
   const sx = shake > 0 ? (Math.random() - 0.5) * shake : 0;
   const sz = shake > 0 ? (Math.random() - 0.5) * shake : 0;
   camera.position.x += ((tx + sx) - camera.position.x) * Math.min(1, dt * 5);
-  camera.position.z += ((tz + 12 + sz) - camera.position.z) * Math.min(1, dt * 5);
-  camera.position.y = 24;
-  camera.lookAt(tx + sx, 0, tz - 2 + sz);
+  camera.position.z += ((tz + 10.5 + sz) - camera.position.z) * Math.min(1, dt * 5);
+  camera.position.y = 17.5;
+  camera.lookAt(tx + sx, 0, tz - 1.5 + sz);
 }
 
 // ------------------------------------------------------------ shot mode ---
@@ -999,6 +983,11 @@ function stageShot(kind) {
     run.gold = 120;
     run.kills = 14;
     player.hp = 78;
+    // Stage the fight in the middle of the arena, not at the south wall,
+    // so the capture frames walls on every side.
+    player.x = 0;
+    player.z = 0;
+    syncPlayerMesh();
     // Clear the room-1 spawns and stage a mid-fight scrum instead.
     clearField();
     const r = mulberry32(runSeed);
@@ -1011,19 +1000,8 @@ function stageShot(kind) {
       mesh.position.set(e.x, 0, e.z);
       const blob = makeBlob(1.3);
       scene.add(mesh, blob);
-      const hpBg = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.0, 0.12),
-        new THREE.MeshBasicMaterial({ color: 0x301510, transparent: true, opacity: 0.85, depthWrite: false }),
-      );
-      const hpFg = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.0, 0.12),
-        new THREE.MeshBasicMaterial({ color: 0x58c96b, depthWrite: false }),
-      );
-      hpBg.position.y = 2.1;
-      hpFg.position.y = 2.1;
-      hpFg.position.z = 0.01;
-      mesh.add(hpBg, hpFg);
-      enemyViews.set(e, { mesh, blob, hpBg, hpFg });
+      const bar = attachHpBar(mesh, 1.0, 2.1);
+      enemyViews.set(e, { mesh, blob, hpBg: bar.hpBg, hpFg: bar.hpFg });
     }
     // Fight for a second and a half so the capture shows motion: swings,
     // particles, enemies closing in.
@@ -1034,6 +1012,13 @@ function stageShot(kind) {
     }
     mouse.down = false;
     showSlash(player.facing, Math.PI * 2, 3.4);
+    clearAllFlashes();
+    // If the staged scrum somehow cleared the room mid-staging, put the
+    // combat screen back: this capture is a fight, not a boon pick.
+    if (screen !== 'playing') {
+      screen = 'playing';
+      showScreen(null);
+    }
     shotFrozen = true;
     return;
   }
@@ -1046,46 +1031,38 @@ function stageShot(kind) {
     run.kills = 31;
     player.hp = 64;
     player.x = 0;
-    player.z = 4;
+    player.z = 5;
     clearField();
     const zone = ZONES[run.zone];
     startBossRoom(run, zone.boss);
     const bossId = zone.boss;
-    boss = makeBoss(bossId, 0, -6, {});
+    boss = makeBoss(bossId, 0, -3, {});
     boss.hp = Math.round(boss.maxHp * 0.55);
     const mesh = makeBossMesh(bossId);
     mesh.position.set(boss.x, 0, boss.z);
     const blob = makeBlob(2.6);
     scene.add(mesh, blob);
-    const hpBg = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.6, 0.16),
-      new THREE.MeshBasicMaterial({ color: 0x301510, transparent: true, opacity: 0.85, depthWrite: false }),
-    );
-    const hpFg = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.6, 0.16),
-      new THREE.MeshBasicMaterial({ color: 0xe04e3a, depthWrite: false }),
-    );
-    hpBg.position.y = 3.4;
-    hpFg.position.y = 3.4;
-    hpFg.position.z = 0.01;
-    mesh.add(hpBg, hpFg);
-    bossView = { mesh, blob, hpBg, hpFg };
+    const bar = attachHpBar(mesh, 1.6, 3.4, 0xe04e3a);
+    bossView = { mesh, blob, hpBg: bar.hpBg, hpFg: bar.hpFg };
     setBossBar(boss.name, boss.hp / boss.maxHp);
     const r = mulberry32(runSeed);
     for (let i = 0; i < 3; i++) {
-      const pos = randPosOnRing(0, -4, 5, r, 3);
+      const pos = randPosOnRing(0, -2, 4, r, 3);
       const e = makeEnemy('shambler', pos.x, pos.z, {});
       enemies.push(e);
       const em = makeEnemyMesh('shambler', false);
       em.position.set(e.x, 0, e.z);
       const eb = makeBlob(1.3);
       scene.add(em, eb);
-      enemyViews.set(e, { mesh: em, blob: eb, hpBg: null, hpFg: null });
+      const ebar = attachHpBar(em, 1.0, 2.1);
+      enemyViews.set(e, { mesh: em, blob: eb, hpBg: ebar.hpBg, hpFg: ebar.hpFg });
     }
     for (let i = 0; i < 40; i++) {
       aimAtBoss();
       stepSim(STEP);
     }
+    mouse.down = false;
+    clearAllFlashes();
     shotFrozen = true;
     return;
   }
@@ -1110,6 +1087,25 @@ function stageShot(kind) {
     shotFrozen = true;
     return;
   }
+}
+
+// Restore every flashed material at once (used after shot staging, so a
+// frozen capture never catches an enemy mid white-flash).
+function clearAllFlashes() {
+  const restore = (group) => {
+    if (!group) return;
+    group.traverse((m) => {
+      if (!m.isMesh || !m.material || !m.material.emissive) return;
+      if (m.userData.savedEmissive !== undefined) {
+        m.material.emissive.setHex(m.userData.savedEmissive);
+        m.material.emissiveIntensity = 1;
+        m.userData.flashUntil = 0;
+      }
+    });
+  };
+  for (const [, v] of enemyViews) restore(v.mesh);
+  if (bossView) restore(bossView.mesh);
+  restore(playerMesh);
 }
 
 function aimAtNearestEnemy() {
@@ -1146,6 +1142,13 @@ window.__game = {
   get enemies() { return enemies.length; },
   get bossHp() { return boss ? boss.hp : null; },
   get phase() { return run ? run.phase : null; },
+  get playerPos() { return player ? { x: player.x, z: player.z } : null; },
+  get enemyPositions() { return enemies.filter((e) => !e.dead).map((e) => ({ x: e.x, z: e.z })); },
+  get bossPos() { return boss ? { x: boss.x, z: boss.z } : null; },
+  project(x, z) {
+    const v = new THREE.Vector3(x, 1, z).project(camera);
+    return { x: (v.x + 1) / 2 * window.innerWidth, y: (1 - v.y) / 2 * window.innerHeight };
+  },
 };
 
 boot();
