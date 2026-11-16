@@ -1,0 +1,110 @@
+// GRAVEWARD palette: one bright, readable day look shared by every zone,
+// with a per-zone accent so City, Graveyard and The Hollow read differently
+// at a glance. Material colours stay near-white so procedural textures
+// never go muddy (the texture multiplies the colour).
+
+export const PALETTE = {
+  sky: 0x9fc7e8,
+  fog: 0xcfe4f2,
+  sun: 0xfff2d0,
+  sunIntensity: 2.1,
+  hemiSky: 0xbfd9ee,
+  hemiGround: 0x8a7a5e,
+  hemiIntensity: 0.9,
+  player: 0x3f6fb5,
+  playerTrim: 0xf2c14e,
+  playerSkin: 0xe8b88a,
+  enemyShambler: 0x7a9a58,
+  enemySpitter: 0x9a7ab5,
+  enemyBrute: 0x8a5a44,
+  eliteTint: 0xf2c14e,
+  gold: 0xf2c14e,
+  coinEdge: 0xc08a1e,
+  hpGood: 0x58c96b,
+  hpLow: 0xe04e3a,
+  damageNumber: '#ffffff',
+  critNumber: '#ffd94a',
+  healNumber: '#7fe08a',
+  shadowBlob: 'rgba(0,0,0,0.32)',
+};
+
+// Per-zone look. `floor` names a texture key from textures.js; `accent`
+// tints props and torches; `fogColor` tints the far haze.
+export const ZONES = {
+  city: {
+    id: 'city',
+    name: 'City',
+    subtitle: 'Besieged quarter',
+    floor: 'cobble',
+    wall: 'brick',
+    accent: 0xd98a3d,
+    fogColor: 0xcfe4f2,
+    propTint: 0xb98a5e,
+    boss: 'butcher',
+    bossName: 'PIG BUTCHER',
+    intro: 'The market square is overrun. The butcher charges the toll.',
+  },
+  graveyard: {
+    id: 'graveyard',
+    name: 'Graveyard',
+    subtitle: 'Bone yard',
+    floor: 'grass',
+    wall: 'bone',
+    accent: 0x7fd08a,
+    fogColor: 0xd6e8d8,
+    propTint: 0x9a9a8a,
+    boss: 'lich',
+    bossName: 'LICH',
+    intro: 'The graves are empty. Something dug them up from inside.',
+  },
+  hollow: {
+    id: 'hollow',
+    name: 'The Hollow',
+    subtitle: 'Where the warden fell',
+    floor: 'ash',
+    wall: 'obsidian',
+    accent: 0x9a7fe0,
+    fogColor: 0xd8d0e8,
+    propTint: 0x6a5a7a,
+    boss: 'hollowking',
+    bossName: 'HOLLOW KING',
+    intro: 'The first warden never left. He is still on duty.',
+  },
+};
+
+export const DIFFICULTIES = {
+  normal: {
+    id: 'normal',
+    name: 'Normal',
+    lines: ['Elites never appear', 'Enemies deal normal damage', 'The boss is dangerous enough'],
+    goldMult: 1,
+    enemyDamageMult: 1,
+    bossHpMult: 1,
+    bossDamageMult: 1,
+    eliteChance: 0,
+  },
+  hard: {
+    id: 'hard',
+    name: 'Hard',
+    lines: [
+      'Elite versions of enemies rarely appear',
+      'Enemies deal 50% more damage',
+      'The boss is getting more dangerous',
+    ],
+    goldMult: 2,
+    enemyDamageMult: 1.5,
+    bossHpMult: 1.25,
+    bossDamageMult: 1.25,
+    eliteChance: 0.12,
+  },
+  nightmare: {
+    id: 'nightmare',
+    name: 'Nightmare',
+    lines: ['Elites everywhere', 'Enemies deal double damage', 'The boss hunts you'],
+    goldMult: 3,
+    enemyDamageMult: 2,
+    bossHpMult: 1.6,
+    bossDamageMult: 1.6,
+    eliteChance: 0.3,
+  },
+};

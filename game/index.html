@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GRAVEWARD — a top-down arena roguelike</title>
+<style>
+  :root {
+    --gold: #f2c14e;
+    --ink: #f2ede2;
+    --panel: rgba(16, 18, 24, 0.88);
+    --panel-edge: #3a3f4a;
+    --red: #e04e3a;
+    --green: #58c96b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0e1218; }
+  body { font-family: system-ui, "Segoe UI", Roboto, sans-serif; color: var(--ink); }
+  #game-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* ---- in-run HUD ---- */
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 5; }
+  #hud.visible { display: block; }
+  .hud-box { position: absolute; background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 10px; padding: 10px 14px; }
+  #hud-topleft { top: 14px; left: 14px; min-width: 240px; }
+  #hud-topright { top: 14px; right: 14px; text-align: right; }
+  #hud-bottomleft { bottom: 14px; left: 14px; }
+  #hud-bottomright { bottom: 14px; right: 14px; text-align: right; }
+  .bar { width: 210px; height: 16px; background: #2a1410; border-radius: 8px; overflow: hidden; border: 1px solid #000; }
+  .bar > div { height: 100%; background: var(--green); transition: width 0.15s; }
+  .bar > div.low { background: var(--red); }
+  #hp-text { font-size: 13px; font-weight: 700; margin-top: 4px; }
+  .stat-line { font-size: 17px; font-weight: 700; line-height: 1.5; }
+  .stat-line .gold { color: var(--gold); }
+  #room-text { font-size: 15px; letter-spacing: 1px; }
+  #weapon-text { font-size: 16px; font-weight: 800; }
+  #cooldown-bar { width: 150px; height: 6px; background: #222; border-radius: 3px; overflow: hidden; margin-top: 5px; }
+  #cooldown-fill { height: 100%; background: var(--gold); width: 100%; }
+  .hint { font-size: 12px; opacity: 0.75; margin-top: 4px; }
+  #boss-bar { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); width: min(560px, 60vw); text-align: center; display: none; }
+  #boss-bar.visible { display: block; }
+  #boss-name { font-size: 24px; font-weight: 900; letter-spacing: 4px; color: #ffd9d0; text-shadow: 0 2px 0 #000, 0 0 18px rgba(224, 78, 58, 0.7); }
+  #boss-bar .bar { width: 100%; height: 14px; margin-top: 4px; }
+  #boss-fill { background: var(--red); }
+  #toast { position: absolute; bottom: 96px; left: 50%; transform: translateX(-50%); max-width: 640px; text-align: center; background: var(--panel); border: 1px solid var(--panel-edge); border-left: 4px solid var(--gold); border-radius: 8px; padding: 10px 16px; font-size: 15px; opacity: 0; transition: opacity 0.3s; }
+  #toast.visible { opacity: 1; }
+  #door-prompt { position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%); text-align: center; font-size: 22px; font-weight: 800; text-shadow: 0 2px 0 #000; display: none; }
+  #door-prompt.visible { display: block; }
+  #door-prompt .key { display: inline-block; border: 2px solid var(--gold); border-radius: 6px; padding: 2px 10px; color: var(--gold); margin: 0 4px; }
+  #vignette { position: fixed; inset: 0; pointer-events: none; z-index: 4; box-shadow: inset 0 0 0 rgba(224, 78, 58, 0); transition: box-shadow 0.2s; }
+  #vignette.hurt { box-shadow: inset 0 0 120px rgba(224, 78, 58, 0.55); }
+
+  /* ---- screens ---- */
+  .screen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; background: radial-gradient(ellipse at center, rgba(10, 14, 20, 0.55), rgba(10, 14, 20, 0.88)); z-index: 10; padding: 24px; }
+  .screen.visible { display: flex; }
+  .screen h1 { font-size: 64px; font-weight: 900; letter-spacing: 10px; color: var(--ink); text-shadow: 0 4px 0 #000, 0 0 32px rgba(242, 193, 78, 0.45); }
+  .screen h1 .grave { color: var(--gold); }
+  .screen h2 { font-size: 30px; font-weight: 800; letter-spacing: 3px; margin-bottom: 6px; }
+  .tagline { font-size: 17px; opacity: 0.9; margin: 10px 0 26px; max-width: 560px; text-align: center; line-height: 1.5; }
+  .big-btn { pointer-events: auto; cursor: pointer; font-size: 20px; font-weight: 800; letter-spacing: 2px; color: #1a1408; background: var(--gold); border: none; border-radius: 10px; padding: 14px 42px; margin-top: 8px; box-shadow: 0 4px 0 #a87e1e; }
+  .big-btn:hover { filter: brightness(1.08); }
+  .big-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #a87e1e; }
+  .ghost-btn { pointer-events: auto; cursor: pointer; font-size: 15px; font-weight: 700; color: var(--ink); background: transparent; border: 2px solid var(--panel-edge); border-radius: 8px; padding: 10px 22px; margin-top: 12px; }
+  .ghost-btn:hover { border-color: var(--gold); }
+  .controls { font-size: 14px; line-height: 1.9; opacity: 0.85; text-align: center; margin-top: 26px; }
+  .controls b { color: var(--gold); }
+  .cards { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; max-width: 980px; margin-top: 18px; }
+  .card { pointer-events: auto; cursor: pointer; width: 250px; background: var(--panel); border: 2px solid var(--panel-edge); border-radius: 12px; padding: 18px; text-align: left; color: var(--ink); font-family: inherit; }
+  .card:hover { border-color: var(--gold); transform: translateY(-2px); }
+  .card.locked { opacity: 0.55; cursor: not-allowed; }
+  .card.locked:hover { border-color: var(--panel-edge); transform: none; }
+  .card-icon { text-align: center; margin-bottom: 8px; }
+  .card-title { font-size: 20px; font-weight: 800; }
+  .card-sub { font-size: 13px; opacity: 0.7; margin-top: 2px; }
+  .card-body { font-size: 14px; line-height: 1.5; margin-top: 10px; opacity: 0.92; }
+  .card-body p { margin: 4px 0; }
+  .boss-line { color: #ff9a8a; }
+  .gold-line { color: var(--gold); font-weight: 700; }
+  .card-locked-note { font-size: 13px; color: var(--gold); margin-top: 10px; }
+  .vex-quote { font-style: italic; font-size: 15px; opacity: 0.85; margin-top: 22px; max-width: 560px; text-align: center; }
+  .vex-quote b { color: #c98ad0; }
+  .stats { display: grid; grid-template-columns: auto auto; gap: 6px 28px; font-size: 18px; margin: 18px 0 8px; }
+  .stat { display: contents; }
+  .stat span { opacity: 0.8; }
+  .stat b { text-align: right; color: var(--gold); }
+  #victory-line, #defeat-line { font-style: italic; max-width: 560px; text-align: center; margin-top: 14px; line-height: 1.5; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.min.js"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="game-canvas"></canvas>
+<div id="vignette"></div>
+
+<div id="hud">
+  <div class="hud-box" id="hud-topleft">
+    <div class="bar"><div id="hp-fill" style="width:100%"></div></div>
+    <div id="hp-text">100 / 100</div>
+  </div>
+  <div class="hud-box" id="hud-topright">
+    <div class="stat-line"><span class="gold">🪙 <span id="gold-text">0</span></span> &nbsp; ⚔️ <span id="kills-text">0</span></div>
+    <div id="room-text">Room 1 / 3</div>
+  </div>
+  <div class="hud-box" id="hud-bottomleft">
+    <div id="weapon-text">Sword</div>
+    <div id="cooldown-bar"><div id="cooldown-fill"></div></div>
+    <div class="hint">LMB attack &nbsp;·&nbsp; Shift dash &nbsp;·&nbsp; Esc pause &nbsp;·&nbsp; R restart</div>
+  </div>
+  <div class="hud-box" id="hud-bottomright">
+    <div class="stat-line">Dash <span id="dash-text">⬢</span></div>
+  </div>
+  <div id="boss-bar">
+    <div id="boss-name">BOSS</div>
+    <div class="bar"><div id="boss-fill" style="width:100%"></div></div>
+  </div>
+  <div id="toast"></div>
+  <div id="door-prompt">The way north is open.<br>Press <span class="key">E</span> to face the boss</div>
+</div>
+
+<div class="screen visible" id="screen-title">
+  <h1><span class="grave">GRAVE</span>WARD</h1>
+  <p class="tagline">A top-down arena roguelike. Hold the line against the dead, clear three rooms, and send the boss back to its grave.</p>
+  <button class="big-btn" id="btn-title-start">ENTER THE GRAVEYARD</button>
+  <div class="controls">
+    <b>WASD</b> move &nbsp;·&nbsp; <b>Mouse</b> aim &nbsp;·&nbsp; <b>Click / hold</b> attack<br>
+    <b>Shift</b> dash &nbsp;·&nbsp; <b>E</b> advance &nbsp;·&nbsp; <b>R</b> restart &nbsp;·&nbsp; <b>Esc</b> pause
+  </div>
+  <p class="vex-quote"><b>Vex:</b> “Pick something loud. The dead hate loud.”</p>
+</div>
+
+<div class="screen" id="screen-zone">
+  <h2>CHOOSE YOUR HUNTING GROUND</h2>
+  <div class="cards" id="zone-cards"></div>
+</div>
+
+<div class="screen" id="screen-difficulty">
+  <h2>HOW HARD SHOULD IT HURT?</h2>
+  <div class="cards" id="diff-cards"></div>
+</div>
+
+<div class="screen" id="screen-weapon">
+  <h2>CHOOSE YOUR WEAPON</h2>
+  <div class="cards" id="weapon-cards"></div>
+  <p class="vex-quote"><b>Vex:</b> “The blunderbuss is rude. The axe is ruder. Choose accordingly.”</p>
+</div>
+
+<div class="screen" id="screen-upgrade">
+  <h2>ROOM CLEARED — PICK A BOON</h2>
+  <div class="cards" id="upgrade-cards"></div>
+</div>
+
+<div class="screen" id="screen-pause">
+  <h2>PAUSED</h2>
+  <p class="tagline">The dead wait. They are very good at waiting.</p>
+  <button class="big-btn" id="btn-pause-resume">RESUME</button>
+  <button class="ghost-btn" id="btn-pause-menu">QUIT TO TITLE</button>
+</div>
+
+<div class="screen" id="screen-victory">
+  <h2>🏆 THE GRAVE IS QUIET</h2>
+  <div class="stats" id="victory-stats"></div>
+  <p id="victory-line"></p>
+  <button class="big-btn" id="btn-victory-again">PLAY AGAIN (R)</button>
+  <button class="ghost-btn" id="btn-victory-menu">BACK TO TITLE</button>
+</div>
+
+<div class="screen" id="screen-defeat">
+  <h2>💀 THE WARDEN HAS FALLEN</h2>
+  <div class="stats" id="defeat-stats"></div>
+  <p id="defeat-line">Vex: “Get up. The dead are laughing, and I hate their laugh.”</p>
+  <button class="big-btn" id="btn-defeat-retry">RETRY (R)</button>
+  <button class="ghost-btn" id="btn-defeat-menu">BACK TO TITLE</button>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
